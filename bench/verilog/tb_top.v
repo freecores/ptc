@@ -44,6 +44,9 @@
 // CVS Revision History
 //
 // $Log: not supported by cvs2svn $
+// Revision 1.2  2001/08/21 23:23:48  lampret
+// Changed directory structure, defines and port names.
+//
 // Revision 1.1  2001/06/05 07:45:32  lampret
 // Added initial RTL and test benches. There are still some issues with these files.
 //
@@ -112,7 +115,7 @@ wb_master wb_master(
 //
 // Instantiation of PTC core
 //
-ptc ptc(
+ptc_top ptc_top(
 	// WISHBONE Interface
 	.wb_clk_i(clk),
 	.wb_rst_i(rst),

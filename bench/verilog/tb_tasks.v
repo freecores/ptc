@@ -44,13 +44,16 @@
 // CVS Revision History
 //
 // $Log: not supported by cvs2svn $
+// Revision 1.2  2001/08/21 23:23:48  lampret
+// Changed directory structure, defines and port names.
+//
 // Revision 1.1  2001/06/05 07:45:32  lampret
 // Added initial RTL and test benches. There are still some issues with these files.
 //
 //
 
 `include "timescale.v"
-`include "defines.v"
+`include "ptc_defines.v"
 `include "tb_defines.v"
 
 module tb_tasks;
@@ -526,7 +529,7 @@ begin
 `endif
 
 	// Get ptc_oen
-	l1 = tb_top.ptc.oen_padoen_o;
+	l1 = tb_top.ptc_top.oen_padoen_o;
 
 	//
 	// Phase 2
@@ -542,7 +545,7 @@ begin
 `endif
 
 	// Get ptc_oen
-	l2 = tb_top.ptc.oen_padoen_o;
+	l2 = tb_top.ptc_top.oen_padoen_o;
 
 	//
 	// Phase 3
@@ -643,8 +646,8 @@ begin
 	showctrl;
 `endif
 
-	// Do 1500 external clock cycles
-	tb_top.clkrst.gen_ptc_ecgt(1500);
+	// Do 1501 external clock cycles
+	tb_top.clkrst.gen_ptc_ecgt(1501);
 
 	// Get counter
 	getcntr(l1);
@@ -718,18 +721,17 @@ begin
 `ifdef PTC_DEBUG
 	showctrl;
 `endif
-
 	// Do 999 external clock cycles
 	tb_top.clkrst.gen_ptc_ecgt(999);
 
 	// Sample interrupt request. It should be zero.
-	l1 = tb_top.ptc.wb_inta_o;
+	l1 = tb_top.ptc_top.wb_inta_o;
 
-	// Do 1 additional external clock cycles
-	tb_top.clkrst.gen_ptc_ecgt(10);
+	// Do 4 additional external clock cycles
+	tb_top.clkrst.gen_ptc_ecgt(4);
 
 	// Sample interrupt request. It should be one.
-	l2 = tb_top.ptc.wb_inta_o;
+	l2 = tb_top.ptc_top.wb_inta_o;
 
 	//
 	// Phase 2
@@ -744,7 +746,7 @@ begin
 	setctrl(1 << `PTC_RPTC_CTRL_EN | 1 << `PTC_RPTC_CTRL_ECLK);
 
 	// Sample interrupt request. It should be again zero.
-	l3 = tb_top.ptc.wb_inta_o;
+	l3 = tb_top.ptc_top.wb_inta_o;
 
 	//
 	// Phase 3
@@ -759,12 +761,12 @@ begin
 end
 endtask
 
-always @(posedge tb_top.ptc.gate_clk_pad_i)
-	if (monitor_ptc_pwm && !tb_top.ptc.pwm_pad_o)
+always @(posedge tb_top.ptc_top.gate_clk_pad_i)
+	if (monitor_ptc_pwm && !tb_top.ptc_top.pwm_pad_o)
 		pwm_l1 = pwm_l1 + 1;
 
-always @(posedge tb_top.ptc.gate_clk_pad_i)
-	if (monitor_ptc_pwm && tb_top.ptc.pwm_pad_o)
+always @(posedge tb_top.ptc_top.gate_clk_pad_i)
+	if (monitor_ptc_pwm && tb_top.ptc_top.pwm_pad_o)
 		pwm_l2 = pwm_l2 + 1;
 
 //
@@ -785,8 +787,10 @@ begin
 	setctrl(1 << `PTC_RPTC_CTRL_CNTRRST);
 
 	// Set intervals 10 and 20
-	sethrc('d10);
-	setlrc('d30);
+	// HRC must be set with number one less than low period
+	// because it takes one clock cycle to reset the counter
+	sethrc('d9);
+	setlrc('d29);
 
 	// Enable PTC, use external clock
 	setctrl(1 << `PTC_RPTC_CTRL_EN | 1 << `PTC_RPTC_CTRL_ECLK);
@@ -911,7 +915,7 @@ endtask
 //
 // Do continues check for interrupts
 //
-always @(posedge tb_top.ptc.wb_inta_o)
+always @(posedge tb_top.ptc_top.wb_inta_o)
 	if (ints_disabled) begin
 		$display("Spurious interrupt detected. ");
 		failed;
@@ -924,7 +928,7 @@ always @(posedge tb_top.ptc.wb_inta_o)
 //
 initial begin
 `ifdef PTC_DUMP_VCD
-	$dumpfile("../sim/tb_top.vcd");
+	$dumpfile("../out/tb_top.vcd");
 	$dumpvars(0);
 `endif
 	nr_failed = 0;
