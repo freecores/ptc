@@ -45,9 +45,14 @@
 // CVS Revision History
 //
 // $Log: not supported by cvs2svn $
+// Revision 1.1  2001/06/05 07:45:36  lampret
+// Added initial RTL and test benches. There are still some issues with these files.
+//
 //
 
+// synopsys translate_off
 `include "timescale.vh"
+// synopsys translate_on
 `include "defines.vh"
 
 module ptc(
@@ -60,8 +65,8 @@ module ptc(
 );
 
 parameter dw = 32;
-parameter aw = 16;
-parameter cw = 32;
+parameter aw = `PTC_ADDRHH+1;
+parameter cw = `PTC_CW;
 
 //
 // WISHBONE Interface
@@ -147,12 +152,28 @@ reg	[dw-1:0]	dat_o;		// Data out
 reg			ptc_pwm;	// PWM output
 reg			int;		// Interrupt reg
 wire			int_match;	// Interrupt match
+wire			full_decoding;	// Full address decoding qualification
 
 //
-// All WISHBONE transfer terminations are successful
+// All WISHBONE transfer terminations are successful except when:
+// a) full address decoding is enabled and address doesn't match
+//    any of the PTC registers
+// b) sel_i evaluation is enabled and one of the sel_i inputs is zero
 //
-assign ack_o = cyc_i & stb_i;
+assign ack_o = cyc_i & stb_i & !err_o;
+`ifdef FULL_DECODE
+`ifdef STRICT_32BIT_ACCESS
+assign err_o = cyc_i & stb_i & !full_decoding | (sel_i != 4'b1111);
+`else
+assign err_o = cyc_i & stb_i & !full_decoding;
+`endif
+`else
+`ifdef STRICT_32BIT_ACCESS
+assign err_o = (sel_i != 4'b1111);
+`else
 assign err_o = 1'b0;
+`endif
+`endif
 
 //
 // Counter clock is selected by RPTC_CTRL[ECLK]. When it is set,
@@ -193,12 +214,22 @@ assign eclk_gate = ptc_ecgt ^ rptc_ctrl[`RPTC_CTRL_NEC];
 assign gate = eclk_gate & ~rptc_ctrl[`RPTC_CTRL_ECLK];
 
 //
+// Full address decoder
+//
+`ifdef FULL_DECODE
+assign full_decoding = (adr_i[`PTC_ADDRHH:`PTC_ADDRHL] == {`PTC_ADDRHH-`PTC_ADDRHL+1{1'b0}}) &
+			(adr_i[`PTC_ADDRLH:`PTC_ADDRLL] == {`PTC_ADDRLH-`PTC_ADDRLL+1{1'b0}});
+`else
+assign full_decoding = 1'b1;
+`endif
+
+//
 // PTC registers address decoder
 //
-assign rptc_cntr_sel = cyc_i & stb_i & (adr_i[`PTCOFS_BITS] == `RPTC_CNTR);
-assign rptc_hrc_sel = cyc_i & stb_i & (adr_i[`PTCOFS_BITS] == `RPTC_HRC);
-assign rptc_lrc_sel = cyc_i & stb_i & (adr_i[`PTCOFS_BITS] == `RPTC_LRC);
-assign rptc_ctrl_sel = cyc_i & stb_i & (adr_i[`PTCOFS_BITS] == `RPTC_CTRL);
+assign rptc_cntr_sel = cyc_i & stb_i & (adr_i[`PTCOFS_BITS] == `RPTC_CNTR) & full_decoding;
+assign rptc_hrc_sel = cyc_i & stb_i & (adr_i[`PTCOFS_BITS] == `RPTC_HRC) & full_decoding;
+assign rptc_lrc_sel = cyc_i & stb_i & (adr_i[`PTCOFS_BITS] == `RPTC_LRC) & full_decoding;
+assign rptc_ctrl_sel = cyc_i & stb_i & (adr_i[`PTCOFS_BITS] == `RPTC_CTRL) & full_decoding;
 
 //
 // Write to RPTC_CTRL or update of RPTC_CTRL[INT] bit
@@ -212,7 +243,7 @@ always @(posedge clk_i or posedge rst_i)
 	else if (rptc_ctrl[`RPTC_CTRL_INTE])
 		rptc_ctrl[`RPTC_CTRL_INT] <= #1 rptc_ctrl[`RPTC_CTRL_INT] | int;
 `else
-assign rptc_ctrl = 9'h01;	// RPTC_CTRL[EN] = 1
+assign rptc_ctrl = `DEF_RPTC_CTRL;
 `endif
 
 //
@@ -227,7 +258,7 @@ always @(posedge hrc_clk or posedge rst_i)
 	else if (rptc_ctrl[`RPTC_CTRL_CAPTE])
 		rptc_hrc <= #1 rptc_cntr;
 `else
-assign rptc_hrc = cw'b0;	// RPTC_HRC = 0x0
+assign rptc_hrc = `DEF_RPTC_HRC;
 `endif
 
 //
@@ -242,7 +273,7 @@ always @(posedge lrc_clk or posedge rst_i)
 	else if (rptc_ctrl[`RPTC_CTRL_CAPTE])
 		rptc_lrc <= #1 rptc_cntr;
 `else
-assign rptc_lrc = {cw1{'b0}};	// RPTC_LRC = 0x0
+assign rptc_lrc = `DEF_RPTC_LRC;
 `endif
 
 //
@@ -257,7 +288,7 @@ always @(posedge cntr_clk or posedge cntr_rst)
 	else if (!stop && rptc_ctrl[`RPTC_CTRL_EN] && !gate)
 		rptc_cntr <= #1 rptc_cntr + 1;
 `else
-assign rptc_cntr = {cw{1'b0}};
+assign rptc_cntr = `DEF_RPTC_CNTR;
 `endif
 
 //
@@ -266,11 +297,11 @@ assign rptc_cntr = {cw{1'b0}};
 always @(adr_i or rptc_hrc or rptc_lrc or rptc_ctrl or rptc_cntr)
 	case (adr_i[`PTCOFS_BITS])	// synopsys full_case parallel_case
 `ifdef PTC_READREGS
-		`RPTC_HRC: dat_o[cw-1:0] <= rptc_hrc;
-		`RPTC_LRC: dat_o[cw-1:0] <= rptc_lrc;
-		`RPTC_CTRL: dat_o[cw-1:0] <= rptc_ctrl;
+		`RPTC_HRC: dat_o[dw-1:0] <= {{dw-cw{1'b0}}, rptc_hrc};
+		`RPTC_LRC: dat_o[dw-1:0] <= {{dw-cw{1'b0}}, rptc_lrc};
+		`RPTC_CTRL: dat_o[dw-1:0] <= {{dw-9{1'b0}}, rptc_ctrl};
 `endif
-		default: dat_o[cw-1:0] <= rptc_cntr;
+		default: dat_o[dw-1:0] <= {{dw-cw{1'b0}}, rptc_cntr};
 	endcase
 
 //
@@ -303,7 +334,7 @@ assign pwm_rst = lrc_match | rst_i;
 //
 // PWM output
 //
-always @(posedge pwm_rst or posedge hrc_match)
+always @(posedge clk_i)	// posedge pwm_rst or posedge hrc_match
 	if (pwm_rst)
 		ptc_pwm <= #1 1'b0;
 	else if (hrc_match)
