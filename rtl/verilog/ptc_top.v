@@ -45,7 +45,10 @@
 // CVS Revision History
 //
 // $Log: not supported by cvs2svn $
-// Revision 1.2  2001/08/21 23:23:50  lampret
+// Revision 1.4  2001/09/18 18:48:29  lampret
+// Changed top level ptc into ptc_top. Changed defines.v into ptc_defines.v. Reset of the counter is now synchronous.
+//
+// Revision 1.3  2001/08/21 23:23:50  lampret
 // Changed directory structure, defines and port names.
 //
 // Revision 1.2  2001/07/17 00:18:10  lampret
@@ -169,13 +172,13 @@ wire			full_decoding;	// Full address decoding qualification
 assign wb_ack_o = wb_cyc_i & wb_stb_i & !wb_err_o;
 `ifdef PTC_FULL_DECODE
 `ifdef PTC_STRICT_32BIT_ACCESS
-assign wb_err_o = wb_cyc_i & wb_stb_i & !full_decoding | (wb_sel_i != 4'b1111);
+assign wb_err_o = wb_cyc_i & wb_stb_i & (!full_decoding | (wb_sel_i != 4'b1111));
 `else
 assign wb_err_o = wb_cyc_i & wb_stb_i & !full_decoding;
 `endif
 `else
 `ifdef PTC_STRICT_32BIT_ACCESS
-assign wb_err_o = (wb_sel_i != 4'b1111);
+assign wb_err_o = wb_cyc_i & wb_stb_i & (wb_sel_i != 4'b1111);
 `else
 assign wb_err_o = 1'b0;
 `endif
